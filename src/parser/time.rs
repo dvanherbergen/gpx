@@ -1,10 +1,12 @@
 //! time handles parsing of xsd:dateTime.
 
 use std::io::Read;
+use std::num::NonZero;
 
 /// format: [-]CCYY-MM-DDThh:mm:ss[Z|(+|-)hh:mm]
 #[cfg(feature = "use-serde")]
 use serde::{Deserialize, Serialize};
+use time::format_description::well_known::iso8601::{Config, EncodedConfig, TimePrecision};
 use time::{format_description::well_known::Iso8601, OffsetDateTime, PrimitiveDateTime, UtcOffset};
 
 use crate::errors::GpxResult;
@@ -17,7 +19,15 @@ pub struct Time(OffsetDateTime);
 impl Time {
     /// Render time in ISO 8601 format
     pub fn format(&self) -> GpxResult<String> {
-        self.0.format(&Iso8601::DEFAULT).map_err(From::from)
+        // fix timestamp precision to milliseconds, ignoring nanosecond precision
+        // which is not accepted by garmin devices
+        const CONFIG: EncodedConfig = Config::DEFAULT
+            .set_time_precision(TimePrecision::Second {
+                decimal_digits: Some(NonZero::new(3).expect("ignore nanosecond precision")),
+            })
+            .encode();
+
+        self.0.format(&Iso8601::<CONFIG>).map_err(From::from)
     }
 }
 
